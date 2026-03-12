@@ -37,9 +37,19 @@
   - Auto-marks seen on dismiss, supports manual control
 - All 5 phases compile cleanly (`npx tsc --noEmit` passes)
 
+### Session 3 (continued)
+- **Packaged as npm library** (`update-video@0.1.1`)
+  - 5 entry points: `.` (SDK), `./server`, `./capture`, `./compositions`, `./consolidation`
+  - tsup build: ESM + CJS dual output with TypeScript declarations
+  - React/Remotion/zod as peer deps, Anthropic SDK + Playwright as optional deps
+  - `prepublishOnly` hook for automatic builds on publish
+- **Created GitHub repo** — https://github.com/ehoyos007/update-video
+- **Published to npm** — https://www.npmjs.com/package/update-video
+- **Wrote comprehensive README** — Quick Start guide, full API reference, scene types, GitHub Action config
+
 ### Where we left off
-- **All 5 phases are complete.** The full system is built end-to-end.
-- Ready for integration testing, documentation, or packaging as an npm library
+- **Library is published and live.** All 5 phases built, packaged, and distributed.
+- Potential next steps: integration test in a real client app, add database adapter (Postgres/SQLite), add auth to API, server-side MP4 rendering via `@remotion/renderer`
 
 ### Key decisions made
 - **Data source:** AI-generated from git diffs (Claude API)
