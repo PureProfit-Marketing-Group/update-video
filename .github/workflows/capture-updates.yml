@@ -1,0 +1,92 @@
+name: Capture Updates
+
+on:
+  push:
+    tags:
+      - "v*" # Trigger on version tags (v1.0.0, v2.1.3, etc.)
+  workflow_dispatch:
+    inputs:
+      from_ref:
+        description: "Git ref to diff from (e.g., v1.0.0)"
+        required: false
+      to_ref:
+        description: "Git ref to diff to (defaults to HEAD)"
+        required: false
+        default: "HEAD"
+      skip_screenshots:
+        description: "Skip screenshot capture"
+        type: boolean
+        default: false
+
+env:
+  PROJECT_ID: ${{ vars.UPDATE_VIDEO_PROJECT_ID || 'default' }}
+  PROJECT_NAME: ${{ vars.UPDATE_VIDEO_PROJECT_NAME || 'My Project' }}
+  PROD_URL: ${{ vars.UPDATE_VIDEO_PROD_URL || '' }}
+  STAGING_URL: ${{ vars.UPDATE_VIDEO_STAGING_URL || '' }}
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Need full history for git diff
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright (if screenshots enabled)
+        if: ${{ !inputs.skip_screenshots && env.PROD_URL != '' }}
+        run: npx playwright install --with-deps chromium
+
+      - name: Determine diff range
+        id: refs
+        run: |
+          if [ -n "${{ inputs.from_ref }}" ]; then
+            echo "from=${{ inputs.from_ref }}" >> "$GITHUB_OUTPUT"
+          else
+            # Find the previous tag
+            PREV_TAG=$(git tag --sort=-creatordate | sed -n '2p')
+            if [ -z "$PREV_TAG" ]; then
+              PREV_TAG=$(git rev-parse HEAD~1)
+            fi
+            echo "from=$PREV_TAG" >> "$GITHUB_OUTPUT"
+          fi
+          echo "to=${{ inputs.to_ref || 'HEAD' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Run capture pipeline
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          npx tsx src/capture/pipeline.ts \
+            --project-id="${PROJECT_ID}" \
+            --project-name="${PROJECT_NAME}" \
+            --from="${{ steps.refs.outputs.from }}" \
+            --to="${{ steps.refs.outputs.to }}" \
+            --prod-url="${PROD_URL}" \
+            --staging-url="${STAGING_URL}" \
+            ${{ inputs.skip_screenshots && '--skip-screenshots' || '' }} \
+            > capture-result.json 2>&1
+
+      - name: Upload capture result
+        uses: actions/upload-artifact@v4
+        with:
+          name: capture-result
+          path: capture-result.json
+          retention-days: 30
+
+      - name: Upload screenshots
+        if: ${{ !inputs.skip_screenshots }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: .capture/screenshots/
+          retention-days: 30
+          if-no-files-found: ignore
